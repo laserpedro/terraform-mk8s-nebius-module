@@ -1,0 +1,6 @@
+parent_id         = "project-e00xxxxxxxxxxxxxxxx"
+tenant_id         = "tenant-e00xxxxxxxxxxxxxxxx"
+cluster_name      = "ml-training"
+infiniband_fabric = "fabric-3"
+ssh_public_key    = "ssh-ed25519 AAAA... user@host"
+admin_member_ids  = ["useraccount-e00xxxxxxxxxxxxxxxx"]

@@ -38,3 +38,9 @@ variable "viewer_member_ids" {
   type        = list(string)
   default     = []
 }
+
+variable "iam_token" {
+  description = "Nebius IAM token used by the helm provider (nebius iam get-access-token)."
+  type        = string
+  sensitive   = true
+}

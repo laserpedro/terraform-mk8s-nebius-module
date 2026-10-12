@@ -6,6 +6,10 @@ terraform {
       source  = "nebius/nebius"
       version = ">= 0.5.55"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -13,6 +17,16 @@ terraform {
 # (e.g. `export NEBIUS_IAM_TOKEN=$(nebius iam get-access-token)`).
 provider "nebius" {
   domain = "api.eu.nebius.cloud:443"
+}
+
+# Installs the GPU Operator and Dynamo into the new cluster through its public endpoint.
+# export TF_VAR_iam_token=$(nebius iam get-access-token)
+provider "helm" {
+  kubernetes = {
+    host                   = module.mk8s.cluster_public_endpoint
+    cluster_ca_certificate = module.mk8s.cluster_ca_certificate
+    token                  = var.iam_token
+  }
 }
 
 module "mk8s" {
@@ -59,7 +73,7 @@ module "mk8s" {
     }
   }
 
-  # GPU pool on an InfiniBand fabric for distributed training.
+  # GPU pool on an InfiniBand fabric. Nodes boot with NVIDIA drivers preinstalled (cuda13.0).
   gpu_node_groups = {
     h100 = {
       platform           = "gpu-h100-sxm"
@@ -68,5 +82,13 @@ module "mk8s" {
       infiniband_fabric  = var.infiniband_fabric
       boot_disk_size_gib = 1024
     }
+  }
+
+  # GPU software stack: the GPU Operator (on by default with GPU node groups) and the
+  # Dynamo platform with Grove + KAI Scheduler for multinode / disaggregated serving.
+  dynamo = {
+    enabled               = true
+    install_grove         = true
+    install_kai_scheduler = true
   }
 }

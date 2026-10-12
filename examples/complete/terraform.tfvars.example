@@ -4,3 +4,4 @@ cluster_name      = "ml-training"
 infiniband_fabric = "fabric-3"
 ssh_public_key    = "ssh-ed25519 AAAA... user@host"
 admin_member_ids  = ["useraccount-e00xxxxxxxxxxxxxxxx"]
+# iam_token: export TF_VAR_iam_token=$(nebius iam get-access-token)

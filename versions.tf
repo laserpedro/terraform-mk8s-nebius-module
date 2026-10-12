@@ -6,5 +6,9 @@ terraform {
       source  = "nebius/nebius"
       version = ">= 0.5.55"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = ">= 2.12.0, < 4.0.0"
+    }
   }
 }

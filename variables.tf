@@ -116,13 +116,16 @@ variable "access_groups" {
 ################################
 
 variable "k8s_version" {
-  description = "Kubernetes version (major.minor) of the control plane and, by default, of the node groups."
+  description = <<-EOT
+    Kubernetes version (major.minor, e.g. "1.35") of the control plane and, by default, of the node groups.
+    Null uses the Nebius default version. Driver-full GPU images (cuda13.0) require 1.35 or later.
+  EOT
   type        = string
-  default     = "1.31"
+  default     = null
 
   validation {
-    condition     = can(regex("^1\\.[0-9]+$", var.k8s_version))
-    error_message = "k8s_version must look like \"1.31\"."
+    condition     = var.k8s_version == null || can(regex("^1\\.[0-9]+$", var.k8s_version))
+    error_message = "k8s_version must look like \"1.35\"."
   }
 }
 
@@ -207,30 +210,33 @@ variable "cpu_node_groups" {
 variable "gpu_node_groups" {
   description = <<-EOT
     GPU node groups keyed by short name (the group is named "<name>-<key>").
-      infiniband_fabric  - create a GPU cluster on this InfiniBand fabric (e.g. fabric-3) for the group.
-      gpu_cluster_id     - or place the nodes into an existing GPU cluster.
-      gpu_drivers_preset - use a driver-full image (e.g. "cuda12"); null = driverless, install the GPU Operator.
-      gpu_taint          - add the nvidia.com/gpu=true:NoSchedule taint so only GPU workloads land there.
+      infiniband_fabric    - create a GPU cluster on this InfiniBand fabric (e.g. fabric-3) for the group.
+      gpu_cluster_id       - or place the nodes into an existing GPU cluster.
+      preinstalled_drivers - boot a Nebius driver-full image with NVIDIA drivers preinstalled (default).
+                             false = driverless image; the GPU Operator then installs the driver.
+      gpu_drivers_preset   - drivers/CUDA preset of the driver-full image (default "cuda13.0").
+      gpu_taint            - add the nvidia.com/gpu=true:NoSchedule taint so only GPU workloads land there.
   EOT
   type = map(object({
-    platform           = optional(string, "gpu-h100-sxm")
-    preset             = optional(string, "8gpu-128vcpu-1600gb")
-    fixed_node_count   = optional(number, 1)
-    autoscaling        = optional(object({ min_node_count = number, max_node_count = number }))
-    boot_disk_type     = optional(string, "NETWORK_SSD")
-    boot_disk_size_gib = optional(number, 512)
-    os                 = optional(string)
-    k8s_version        = optional(string)
-    public_ip          = optional(bool, false)
-    preemptible        = optional(bool, false)
-    node_labels        = optional(map(string), {})
-    taints             = optional(list(object({ key = string, value = string, effect = string })), [])
-    gpu_taint          = optional(bool, true)
-    infiniband_fabric  = optional(string)
-    gpu_cluster_id     = optional(string)
-    gpu_drivers_preset = optional(string)
-    reservation_ids    = optional(list(string), [])
-    cloud_init         = optional(string)
+    platform             = optional(string, "gpu-h100-sxm")
+    preset               = optional(string, "8gpu-128vcpu-1600gb")
+    fixed_node_count     = optional(number, 1)
+    autoscaling          = optional(object({ min_node_count = number, max_node_count = number }))
+    boot_disk_type       = optional(string, "NETWORK_SSD")
+    boot_disk_size_gib   = optional(number, 512)
+    os                   = optional(string)
+    k8s_version          = optional(string)
+    public_ip            = optional(bool, false)
+    preemptible          = optional(bool, false)
+    node_labels          = optional(map(string), {})
+    taints               = optional(list(object({ key = string, value = string, effect = string })), [])
+    gpu_taint            = optional(bool, true)
+    infiniband_fabric    = optional(string)
+    gpu_cluster_id       = optional(string)
+    preinstalled_drivers = optional(bool, true)
+    gpu_drivers_preset   = optional(string, "cuda13.0")
+    reservation_ids      = optional(list(string), [])
+    cloud_init           = optional(string)
     strategy = optional(object({
       max_surge       = optional(object({ count = optional(number), percent = optional(number) }))
       max_unavailable = optional(object({ count = optional(number), percent = optional(number) }))
@@ -253,4 +259,57 @@ variable "gpu_node_groups" {
     ])
     error_message = "InfiniBand GPU clusters require an 8-GPU preset (8gpu-...)."
   }
+}
+
+################################
+# GPU software stack (Helm add-ons)
+################################
+
+variable "gpu_operator" {
+  description = <<-EOT
+    NVIDIA GPU Operator, installed with Helm when the cluster has at least one GPU node group.
+    It provides the device plugin (nvidia.com/gpu resources), GPU feature discovery, DCGM and the
+    validator. Its driver and container toolkit DaemonSets only run where the node image lacks them:
+      preinstalled_toolkit - driver-full Nebius images also configure the NVIDIA container runtime, so the
+                             operator's toolkit is skipped on those nodes. Set false to let the operator manage it.
+      values               - extra Helm values (YAML documents) applied last.
+  EOT
+  type = object({
+    enabled              = optional(bool, true)
+    version              = optional(string, "v26.7.1")
+    namespace            = optional(string, "gpu-operator")
+    mig_strategy         = optional(string)
+    preinstalled_toolkit = optional(bool, true)
+    values               = optional(list(string), [])
+  })
+  default = {}
+}
+
+variable "dynamo" {
+  description = <<-EOT
+    NVIDIA Dynamo platform (Dynamo operator + CRDs for DynamoGraphDeployment), installed with Helm.
+      install_grove / install_kai_scheduler - bundle Grove and KAI Scheduler, needed for multinode and
+                                              disaggregated serving.
+      install_nats / install_etcd           - bundle NATS / etcd (optional in recent Dynamo releases).
+      prometheus_endpoint                   - Prometheus URL for the planner's SLA mode and autoscaling.
+      values                                - extra Helm values (YAML documents) applied last.
+  EOT
+  type = object({
+    enabled               = optional(bool, false)
+    version               = optional(string, "1.5.1")
+    namespace             = optional(string, "dynamo-system")
+    install_grove         = optional(bool, false)
+    install_kai_scheduler = optional(bool, false)
+    install_nats          = optional(bool, false)
+    install_etcd          = optional(bool, false)
+    prometheus_endpoint   = optional(string)
+    values                = optional(list(string), [])
+  })
+  default = {}
+}
+
+variable "addons_timeout" {
+  description = "Seconds Helm waits for each add-on release to become ready."
+  type        = number
+  default     = 900
 }

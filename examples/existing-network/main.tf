@@ -6,11 +6,25 @@ terraform {
       source  = "nebius/nebius"
       version = ">= 0.5.55"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 3.0"
+    }
   }
 }
 
 provider "nebius" {
   domain = "api.eu.nebius.cloud:443"
+}
+
+# The API is private here, so run Terraform from inside the VPC (bastion, VPN) to install the
+# GPU Operator, or set gpu_operator = { enabled = false } and install it separately.
+provider "helm" {
+  kubernetes = {
+    host                   = module.mk8s.cluster_private_endpoint
+    cluster_ca_certificate = module.mk8s.cluster_ca_certificate
+    token                  = var.iam_token
+  }
 }
 
 # Minimal cluster in an existing subnet, reusing an existing service account,
@@ -61,6 +75,11 @@ variable "subnet_id" {
 
 variable "node_service_account_id" {
   type = string
+}
+
+variable "iam_token" {
+  type      = string
+  sensitive = true
 }
 
 output "cluster_id" {

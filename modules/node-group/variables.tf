@@ -125,7 +125,7 @@ variable "gpu_cluster_id" {
 }
 
 variable "gpu_drivers_preset" {
-  description = "Use a driver-full node image with this CUDA drivers preset (e.g. cuda12). Null keeps a driverless image (install drivers via the NVIDIA GPU Operator)."
+  description = "Use a driver-full node image with this CUDA drivers preset (e.g. cuda13.0). Null keeps a driverless image (install drivers via the NVIDIA GPU Operator)."
   type        = string
   default     = null
 }

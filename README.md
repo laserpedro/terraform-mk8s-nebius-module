@@ -9,7 +9,8 @@ together with everything it needs:
 | IAM | Node service account, a per-cluster group holding its project roles, optional membership in tenant groups, optional access groups for operators | `nebius_iam_v1_service_account`, `nebius_iam_v1_group`, `nebius_iam_v1_access_permit`, `nebius_iam_v1_group_membership` |
 | Control plane | Managed Kubernetes cluster (public and/or private endpoint, 1 or 3 etcd members) | `nebius_mk8s_v1_cluster` |
 | CPU node groups | Any number of CPU pools, fixed size or autoscaled | `nebius_mk8s_v1_node_group` |
-| GPU node groups | Any number of GPU pools, optionally on an InfiniBand GPU cluster, driver-full or driverless images, GPU taint | `nebius_compute_v1_gpu_cluster`, `nebius_mk8s_v1_node_group` |
+| GPU node groups | Any number of GPU pools with NVIDIA drivers preinstalled (or driverless), optionally on an InfiniBand GPU cluster, GPU taint | `nebius_compute_v1_gpu_cluster`, `nebius_mk8s_v1_node_group` |
+| GPU software stack | NVIDIA GPU Operator (on by default with GPU pools) and NVIDIA Dynamo platform (opt-in) | `helm_release` |
 
 ```
 .
@@ -18,10 +19,11 @@ together with everything it needs:
 ├── modules/
 │   ├── network/      # VPC pool, network, subnet (or lookup of an existing subnet)
 │   ├── iam/          # service account, groups, access permits, memberships
-│   └── node-group/   # one mk8s node group (used for both CPU and GPU pools)
+│   ├── node-group/   # one mk8s node group (used for both CPU and GPU pools)
+│   └── addons/       # Helm releases: NVIDIA GPU Operator, NVIDIA Dynamo platform (+ unit tests)
 └── examples/
-    ├── complete/          # new network, IAM groups, autoscaled CPU pool, InfiniBand H100 pool
-    └── existing-network/  # existing subnet + service account, private API, single-GPU pool
+    ├── complete/          # new network, IAM groups, autoscaled CPU pool, InfiniBand H100 pool, GPU Operator + Dynamo
+    └── existing-network/  # existing subnet + service account, private API, single-GPU pool + GPU Operator
 ```
 
 ## Prerequisites
@@ -32,6 +34,8 @@ together with everything it needs:
   if your environment cannot reach the public registry, configure the Nebius mirror in `~/.terraformrc`.
 * Credentials: the provider uses your Nebius CLI profile or an IAM token, e.g.
   `export NEBIUS_IAM_TOKEN=$(nebius iam get-access-token)`.
+* The `hashicorp/helm` provider (2.12+ or 3.x), configured by you against the cluster, whenever the module
+  installs the GPU software stack (any GPU node group, or `dynamo.enabled`). See [Usage](#usage).
 * Enough quota in the project for the chosen CPU/GPU platforms.
 
 ## Usage
@@ -39,6 +43,16 @@ together with everything it needs:
 ```hcl
 provider "nebius" {
   domain = "api.eu.nebius.cloud:443"
+}
+
+# Used to install the GPU Operator and Dynamo into the new cluster.
+# export TF_VAR_iam_token=$(nebius iam get-access-token)
+provider "helm" {
+  kubernetes = {
+    host                   = module.mk8s.cluster_public_endpoint
+    cluster_ca_certificate = module.mk8s.cluster_ca_certificate
+    token                  = var.iam_token
+  }
 }
 
 module "mk8s" {
@@ -78,14 +92,23 @@ module "mk8s" {
       infiniband_fabric  = "fabric-3"
     }
   }
+
+  dynamo = {
+    enabled               = true
+    install_grove         = true
+    install_kai_scheduler = true
+  }
 }
 ```
 
-Then fetch a kubeconfig:
+Then fetch a kubeconfig and check the GPU stack:
 
 ```sh
 $(terraform output -raw get_credentials_command)
-kubectl get nodes
+kubectl get nodes -L workload-type,nvidia.com/gpu.product
+kubectl get pods -n gpu-operator             # device plugin, GFD, DCGM, validator
+kubectl get crd | grep dynamo                # dynamographdeployments, dynamographdeploymentrequests, ...
+kubectl get pods -n dynamo-system            # dynamo-operator
 ```
 
 ## Design notes
@@ -124,6 +147,34 @@ kubectl get nodes
 * Every node gets a `workload-type=cpu|gpu` Kubernetes label in addition to `node_labels`.
 * `ssh_public_key` provisions `ssh_user_name` on every node via cloud-init; a per-group `cloud_init` overrides it.
 
+### GPU software stack
+
+Installed by `modules/addons` with Helm after the CPU node groups are up, so the operators have somewhere to run.
+
+* **NVIDIA drivers.** GPU nodes boot Nebius driver-full images (`gpu_drivers_preset = "cuda13.0"`), so the
+  driver is on the node from the start. Pools with `preinstalled_drivers = false` boot driverless images, and the
+  GPU Operator installs the driver on them instead.
+* **NVIDIA GPU Operator** (`gpu_operator`, chart `v26.7.1`, namespace `gpu-operator`), installed whenever at
+  least one GPU node group exists. It provides the device plugin (`nvidia.com/gpu` resources), GPU feature
+  discovery, DCGM/DCGM exporter and the validator.
+  * Driver-full pools get the node labels `nvidia.com/gpu.deploy.driver=false` and
+    `nvidia.com/gpu.deploy.container-toolkit=false`. The operator keeps labels that are already set, so it
+    leaves the preinstalled driver and container runtime alone.
+  * The operator's driver and toolkit DaemonSets are only enabled when some pool is driverless, so driver-full
+    and driverless pools can share a cluster.
+  * If your driver-full image does not configure the NVIDIA container runtime, set
+    `gpu_operator.preinstalled_toolkit = false` and the operator manages the toolkit.
+  * A plan fails if a pool is driverless while `gpu_operator.enabled = false`.
+* **NVIDIA Dynamo platform** (`dynamo`, chart `dynamo-platform` `1.5.1` from NGC, namespace `dynamo-system`):
+  opt-in with `dynamo.enabled = true`. It installs the Dynamo operator and CRDs (`DynamoGraphDeployment`,
+  `DynamoGraphDeploymentRequest`, ...). For multinode or disaggregated serving set `install_grove` and
+  `install_kai_scheduler`. NATS/etcd are optional in current releases, and `prometheus_endpoint` enables the
+  planner's SLA mode.
+* Pin other chart versions with `gpu_operator.version` / `dynamo.version`. Pass any other Helm values as YAML
+  through `gpu_operator.values` / `dynamo.values`, e.g. `values = [file("gpu-operator-values.yaml")]`.
+* Not installed by this module: the NVIDIA Network Operator (RDMA for InfiniBand) and kube-prometheus-stack.
+  Dynamo works without them, but disaggregated KV-cache transfer falls back to TCP without RDMA.
+
 ## Inputs
 
 | Name | Description | Type | Default |
@@ -143,6 +194,9 @@ kubectl get nodes
 | `ssh_public_key` | Node SSH public key | `string` | `null` |
 | `cpu_node_groups` | CPU node groups | `map(object)` | `{ system = {} }` (2 × `cpu-d3` `16vcpu-64gb`) |
 | `gpu_node_groups` | GPU node groups | `map(object)` | `{}` |
+| `gpu_operator` | NVIDIA GPU Operator settings (`enabled`, `version`, `namespace`, `mig_strategy`, `preinstalled_toolkit`, `values`) | `object` | `{}` (enabled, `v26.7.1`) |
+| `dynamo` | NVIDIA Dynamo platform settings (`enabled`, `version`, `namespace`, `install_grove`, `install_kai_scheduler`, `install_nats`, `install_etcd`, `prometheus_endpoint`, `values`) | `object` | `{}` (disabled, `1.5.1`) |
+| `addons_timeout` | Seconds Helm waits for each add-on release | `number` | `900` |
 
 Every field of the `cpu_node_groups` / `gpu_node_groups` objects is optional and documented in
 [`variables.tf`](variables.tf).
@@ -157,6 +211,16 @@ Every field of the `cpu_node_groups` / `gpu_node_groups` objects is optional and
 | `network_id`, `subnet_id` | Networking layer |
 | `node_service_account_id`, `access_group_ids` | IAM layer |
 | `cpu_node_group_ids`, `gpu_node_group_ids`, `gpu_cluster_ids` | Node groups |
+| `gpu_operator_namespace`, `dynamo_namespace` | GPU software stack (null when not installed) |
+
+## Testing
+
+`modules/addons` has unit tests that run against a mocked helm provider (no cluster needed):
+
+```sh
+terraform -chdir=modules/addons init
+terraform -chdir=modules/addons test
+```
 
 ## Platform/preset reference
 

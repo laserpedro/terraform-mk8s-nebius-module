@@ -82,3 +82,17 @@ output "gpu_cluster_ids" {
   description = "IDs of the InfiniBand GPU clusters created for GPU node groups."
   value       = { for k, c in nebius_compute_v1_gpu_cluster.this : k => c.id }
 }
+
+################################
+# GPU software stack
+################################
+
+output "gpu_operator_namespace" {
+  description = "Namespace of the NVIDIA GPU Operator (null when not installed)."
+  value       = try(module.addons[0].gpu_operator_namespace, null)
+}
+
+output "dynamo_namespace" {
+  description = "Namespace of the NVIDIA Dynamo platform (null when not installed)."
+  value       = try(module.addons[0].dynamo_namespace, null)
+}

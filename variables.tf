@@ -260,3 +260,56 @@ variable "gpu_node_groups" {
     error_message = "InfiniBand GPU clusters require an 8-GPU preset (8gpu-...)."
   }
 }
+
+################################
+# GPU software stack (Helm add-ons)
+################################
+
+variable "gpu_operator" {
+  description = <<-EOT
+    NVIDIA GPU Operator, installed with Helm when the cluster has at least one GPU node group.
+    It provides the device plugin (nvidia.com/gpu resources), GPU feature discovery, DCGM and the
+    validator. Its driver and container toolkit DaemonSets only run where the node image lacks them:
+      preinstalled_toolkit - driver-full Nebius images also configure the NVIDIA container runtime, so the
+                             operator's toolkit is skipped on those nodes. Set false to let the operator manage it.
+      values               - extra Helm values (YAML documents) applied last.
+  EOT
+  type = object({
+    enabled              = optional(bool, true)
+    version              = optional(string, "v26.7.1")
+    namespace            = optional(string, "gpu-operator")
+    mig_strategy         = optional(string)
+    preinstalled_toolkit = optional(bool, true)
+    values               = optional(list(string), [])
+  })
+  default = {}
+}
+
+variable "dynamo" {
+  description = <<-EOT
+    NVIDIA Dynamo platform (Dynamo operator + CRDs for DynamoGraphDeployment), installed with Helm.
+      install_grove / install_kai_scheduler - bundle Grove and KAI Scheduler, needed for multinode and
+                                              disaggregated serving.
+      install_nats / install_etcd           - bundle NATS / etcd (optional in recent Dynamo releases).
+      prometheus_endpoint                   - Prometheus URL for the planner's SLA mode and autoscaling.
+      values                                - extra Helm values (YAML documents) applied last.
+  EOT
+  type = object({
+    enabled               = optional(bool, false)
+    version               = optional(string, "1.5.1")
+    namespace             = optional(string, "dynamo-system")
+    install_grove         = optional(bool, false)
+    install_kai_scheduler = optional(bool, false)
+    install_nats          = optional(bool, false)
+    install_etcd          = optional(bool, false)
+    prometheus_endpoint   = optional(string)
+    values                = optional(list(string), [])
+  })
+  default = {}
+}
+
+variable "addons_timeout" {
+  description = "Seconds Helm waits for each add-on release to become ready."
+  type        = number
+  default     = 900
+}

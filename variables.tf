@@ -116,13 +116,16 @@ variable "access_groups" {
 ################################
 
 variable "k8s_version" {
-  description = "Kubernetes version (major.minor) of the control plane and, by default, of the node groups."
+  description = <<-EOT
+    Kubernetes version (major.minor, e.g. "1.35") of the control plane and, by default, of the node groups.
+    Null uses the Nebius default version. Driver-full GPU images (cuda13.0) require 1.35 or later.
+  EOT
   type        = string
-  default     = "1.31"
+  default     = null
 
   validation {
-    condition     = can(regex("^1\\.[0-9]+$", var.k8s_version))
-    error_message = "k8s_version must look like \"1.31\"."
+    condition     = var.k8s_version == null || can(regex("^1\\.[0-9]+$", var.k8s_version))
+    error_message = "k8s_version must look like \"1.35\"."
   }
 }
 

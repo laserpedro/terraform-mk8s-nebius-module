@@ -44,7 +44,7 @@ module "mk8s" {
   }
 
   # Control plane.
-  k8s_version       = "1.31"
+  k8s_version       = "1.35"
   public_endpoint   = true
   etcd_cluster_size = 3
 

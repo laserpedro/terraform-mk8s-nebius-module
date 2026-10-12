@@ -84,7 +84,7 @@ module "cpu_node_group" {
   cluster_id  = nebius_mk8s_v1_cluster.this.id
   name        = "${var.name}-${each.key}"
   labels      = local.labels
-  k8s_version = coalesce(each.value.k8s_version, var.k8s_version)
+  k8s_version = each.value.k8s_version != null ? each.value.k8s_version : var.k8s_version
 
   fixed_node_count = each.value.fixed_node_count
   autoscaling      = each.value.autoscaling
@@ -127,7 +127,7 @@ module "gpu_node_group" {
   cluster_id  = nebius_mk8s_v1_cluster.this.id
   name        = "${var.name}-${each.key}"
   labels      = local.labels
-  k8s_version = coalesce(each.value.k8s_version, var.k8s_version)
+  k8s_version = each.value.k8s_version != null ? each.value.k8s_version : var.k8s_version
 
   fixed_node_count = each.value.fixed_node_count
   autoscaling      = each.value.autoscaling

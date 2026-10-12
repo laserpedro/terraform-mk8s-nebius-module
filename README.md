@@ -60,7 +60,7 @@ module "mk8s" {
     admins = { roles = ["editor"], member_ids = ["useraccount-e00xxxxxxxxxxxxxxxx"] }
   }
 
-  k8s_version    = "1.31"
+  k8s_version    = "1.35"
   ssh_public_key = file("~/.ssh/id_ed25519.pub")
 
   cpu_node_groups = {
@@ -135,7 +135,7 @@ kubectl get nodes
 | `network` | Networking layer settings (see above) | `object` | `{}` (create everything) |
 | `iam` | Node service account settings | `object` | `{}` (create SA with `editor`) |
 | `access_groups` | Operator access groups | `map(object)` | `{}` |
-| `k8s_version` | Kubernetes `major.minor` | `string` | `"1.31"` |
+| `k8s_version` | Kubernetes `major.minor` (1.35+ for `cuda13.0` driver images) | `string` | `null` (Nebius default) |
 | `public_endpoint` | Public Kubernetes API endpoint | `bool` | `true` |
 | `etcd_cluster_size` | `1` or `3` | `number` | `3` |
 | `service_cidrs` | Kubernetes Service CIDRs | `list(string)` | `null` (Nebius default) |

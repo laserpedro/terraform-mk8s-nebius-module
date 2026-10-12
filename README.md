@@ -76,7 +76,6 @@ module "mk8s" {
       preset             = "8gpu-128vcpu-1600gb"
       fixed_node_count   = 2
       infiniband_fabric  = "fabric-3"
-      gpu_drivers_preset = "cuda12"
     }
   }
 }
@@ -117,8 +116,9 @@ kubectl get nodes
 * GPU groups:
   * `infiniband_fabric` creates a dedicated `nebius_compute_v1_gpu_cluster` for that group
     (8-GPU presets only); `gpu_cluster_id` places it in an existing one.
-  * `gpu_drivers_preset` selects a driver-full image (NVIDIA drivers preinstalled). Leave it null to use a
-    driverless image and install drivers with the NVIDIA GPU Operator.
+  * NVIDIA drivers come preinstalled: GPU nodes boot a Nebius driver-full image (`gpu_drivers_preset`,
+    default `cuda13.0`, requires Kubernetes 1.35+). Set `preinstalled_drivers = false` for a driverless image
+    whose driver is installed by the GPU Operator instead.
   * `gpu_taint = true` (default) adds `nvidia.com/gpu=true:NoSchedule`; GPU workloads need a matching toleration.
   * `reservation_ids` pins the nodes to capacity reservations.
 * Every node gets a `workload-type=cpu|gpu` Kubernetes label in addition to `node_labels`.

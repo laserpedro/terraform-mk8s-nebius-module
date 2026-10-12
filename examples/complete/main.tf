@@ -66,7 +66,6 @@ module "mk8s" {
       preset             = "8gpu-128vcpu-1600gb"
       fixed_node_count   = 2
       infiniband_fabric  = var.infiniband_fabric
-      gpu_drivers_preset = "cuda12"
       boot_disk_size_gib = 1024
     }
   }

@@ -210,30 +210,33 @@ variable "cpu_node_groups" {
 variable "gpu_node_groups" {
   description = <<-EOT
     GPU node groups keyed by short name (the group is named "<name>-<key>").
-      infiniband_fabric  - create a GPU cluster on this InfiniBand fabric (e.g. fabric-3) for the group.
-      gpu_cluster_id     - or place the nodes into an existing GPU cluster.
-      gpu_drivers_preset - use a driver-full image (e.g. "cuda12"); null = driverless, install the GPU Operator.
-      gpu_taint          - add the nvidia.com/gpu=true:NoSchedule taint so only GPU workloads land there.
+      infiniband_fabric    - create a GPU cluster on this InfiniBand fabric (e.g. fabric-3) for the group.
+      gpu_cluster_id       - or place the nodes into an existing GPU cluster.
+      preinstalled_drivers - boot a Nebius driver-full image with NVIDIA drivers preinstalled (default).
+                             false = driverless image; the GPU Operator then installs the driver.
+      gpu_drivers_preset   - drivers/CUDA preset of the driver-full image (default "cuda13.0").
+      gpu_taint            - add the nvidia.com/gpu=true:NoSchedule taint so only GPU workloads land there.
   EOT
   type = map(object({
-    platform           = optional(string, "gpu-h100-sxm")
-    preset             = optional(string, "8gpu-128vcpu-1600gb")
-    fixed_node_count   = optional(number, 1)
-    autoscaling        = optional(object({ min_node_count = number, max_node_count = number }))
-    boot_disk_type     = optional(string, "NETWORK_SSD")
-    boot_disk_size_gib = optional(number, 512)
-    os                 = optional(string)
-    k8s_version        = optional(string)
-    public_ip          = optional(bool, false)
-    preemptible        = optional(bool, false)
-    node_labels        = optional(map(string), {})
-    taints             = optional(list(object({ key = string, value = string, effect = string })), [])
-    gpu_taint          = optional(bool, true)
-    infiniband_fabric  = optional(string)
-    gpu_cluster_id     = optional(string)
-    gpu_drivers_preset = optional(string)
-    reservation_ids    = optional(list(string), [])
-    cloud_init         = optional(string)
+    platform             = optional(string, "gpu-h100-sxm")
+    preset               = optional(string, "8gpu-128vcpu-1600gb")
+    fixed_node_count     = optional(number, 1)
+    autoscaling          = optional(object({ min_node_count = number, max_node_count = number }))
+    boot_disk_type       = optional(string, "NETWORK_SSD")
+    boot_disk_size_gib   = optional(number, 512)
+    os                   = optional(string)
+    k8s_version          = optional(string)
+    public_ip            = optional(bool, false)
+    preemptible          = optional(bool, false)
+    node_labels          = optional(map(string), {})
+    taints               = optional(list(object({ key = string, value = string, effect = string })), [])
+    gpu_taint            = optional(bool, true)
+    infiniband_fabric    = optional(string)
+    gpu_cluster_id       = optional(string)
+    preinstalled_drivers = optional(bool, true)
+    gpu_drivers_preset   = optional(string, "cuda13.0")
+    reservation_ids      = optional(list(string), [])
+    cloud_init           = optional(string)
     strategy = optional(object({
       max_surge       = optional(object({ count = optional(number), percent = optional(number) }))
       max_unavailable = optional(object({ count = optional(number), percent = optional(number) }))

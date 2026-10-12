@@ -151,7 +151,7 @@ module "gpu_node_group" {
     each.key,
     each.value.gpu_cluster_id,
   )
-  gpu_drivers_preset = each.value.gpu_drivers_preset
+  gpu_drivers_preset = each.value.preinstalled_drivers ? each.value.gpu_drivers_preset : null
 
   node_labels = merge({ "workload-type" = "gpu" }, each.value.node_labels)
   taints      = concat(each.value.gpu_taint ? [local.gpu_taint] : [], each.value.taints)
